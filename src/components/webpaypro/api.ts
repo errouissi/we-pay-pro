@@ -1,5 +1,5 @@
 // Replace this with your deployed Google Apps Script Web App URL.
-export const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyPboQLtXsHhS3QTP5b-8_mKkh6pTQMfGaKAHeiVMa1uJ83ydzPPQaRzjy9JmnJK1um6A/exec";
+export const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyN3OuIewu6lCnpRYka6r2kuoQmyCbTMmWaPEaRbOc0103e5egMXst4XWwxkx_sHi6kJw/exec";
 
 export type LoggedUser = {
   user_id: string;
@@ -21,6 +21,23 @@ export type ClientRow = {
   piece_jointe_link: string;
   created_by_user_id: string;
   created_by_name: string;
+};
+
+export type AgentRow = {
+  created_at: string;
+  created_by_user_id: string;
+  created_by_username: string;
+  nom: string;
+  prenom: string;
+  telephone: string;
+  type_agent: string;
+  document_photo_url: string;
+  cin_recto_url: string;
+  cin_verso_url: string;
+  local_photo_url: string;
+  latitude: string;
+  longitude: string;
+  localisation_link: string;
 };
 
 // Google Apps Script Web Apps don't accept custom headers without triggering
@@ -57,4 +74,36 @@ export function getStoredUser(): LoggedUser | null {
   } catch {
     return null;
   }
+}
+
+type FileUpload = { name: string; type: string; base64: string };
+
+export async function createAgent(
+  user: LoggedUser,
+  data: {
+    nom: string;
+    prenom: string;
+    telephone: string;
+    typeAgent: "agence" | "détaillant";
+    latitude: number;
+    longitude: number;
+    localisationLink: string;
+    photoDocument: FileUpload;
+    cinRecto: FileUpload;
+    cinVerso: FileUpload;
+    photoLocal: FileUpload;
+  },
+): Promise<{ success: boolean; message?: string }> {
+  return callScript({
+    action: "createAgent",
+    userId: user.user_id,
+    userName: user.username,
+    ...data,
+  });
+}
+
+export async function getAgents(
+  user: LoggedUser,
+): Promise<{ success: boolean; agents?: AgentRow[]; message?: string }> {
+  return callScript({ action: "getAgents", userId: user.user_id });
 }
