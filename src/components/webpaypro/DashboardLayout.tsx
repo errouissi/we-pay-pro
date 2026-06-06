@@ -1,9 +1,19 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { LoggedUser } from "./api";
 import { NewClientForm } from "./NewClientForm";
 import { MyClientsTable } from "./MyClientsTable";
+import { NewAgentForm } from "./NewAgentForm";
+import { MyAgentsTable } from "./MyAgentsTable";
 
-type View = "new" | "list";
+type View = "new" | "list" | "agent" | "agents";
+
+function hashToView(hash: string): View {
+  if (hash === "#new") return "new";
+  if (hash === "#clients") return "list";
+  if (hash === "#agent") return "agent";
+  if (hash === "#agents") return "agents";
+  return "new";
+}
 
 type Props = {
   user: LoggedUser;
@@ -11,14 +21,18 @@ type Props = {
 };
 
 export function DashboardLayout({ user, onLogout }: Props) {
-  const [view, setView] = useState<View>("new");
+  const [view, setView] = useState<View>(() => hashToView(window.location.hash));
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  useEffect(() => {
+    const onHashChange = () => setView(hashToView(window.location.hash));
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, []);
 
   const navBtn = (active: boolean) =>
     `rounded-lg px-4 py-2 text-sm font-medium transition ${
-      active
-        ? "bg-[#2F9E32] text-white shadow"
-        : "text-[#003C18] hover:bg-[#B7F000]/30"
+      active ? "bg-[#2F9E32] text-white shadow" : "text-[#003C18] hover:bg-[#B7F000]/30"
     }`;
 
   return (
@@ -36,11 +50,17 @@ export function DashboardLayout({ user, onLogout }: Props) {
           </div>
 
           <nav className="hidden items-center gap-2 md:flex">
-            <button onClick={() => setView("new")} className={navBtn(view === "new")}>
+            <button onClick={() => { window.location.hash = "#new"; }} className={navBtn(view === "new")}>
               Nouveau client
             </button>
-            <button onClick={() => setView("list")} className={navBtn(view === "list")}>
+            <button onClick={() => { window.location.hash = "#clients"; }} className={navBtn(view === "list")}>
               Mes clients
+            </button>
+            <button onClick={() => { window.location.hash = "#agent"; }} className={navBtn(view === "agent")}>
+              Nouvel agent
+            </button>
+            <button onClick={() => { window.location.hash = "#agents"; }} className={navBtn(view === "agents")}>
+              Mes agents
             </button>
           </nav>
 
@@ -60,7 +80,14 @@ export function DashboardLayout({ user, onLogout }: Props) {
               className="rounded-lg border border-[#C8D0C4] p-2 text-[#003C18] md:hidden"
               aria-label="Menu"
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
                 <path d="M3 6h18M3 12h18M3 18h18" />
               </svg>
             </button>
@@ -71,7 +98,7 @@ export function DashboardLayout({ user, onLogout }: Props) {
             <div className="flex flex-col gap-2">
               <button
                 onClick={() => {
-                  setView("new");
+                  window.location.hash = "#new";
                   setMobileNavOpen(false);
                 }}
                 className={navBtn(view === "new")}
@@ -80,12 +107,30 @@ export function DashboardLayout({ user, onLogout }: Props) {
               </button>
               <button
                 onClick={() => {
-                  setView("list");
+                  window.location.hash = "#clients";
                   setMobileNavOpen(false);
                 }}
                 className={navBtn(view === "list")}
               >
                 Mes clients
+              </button>
+              <button
+                onClick={() => {
+                  window.location.hash = "#agent";
+                  setMobileNavOpen(false);
+                }}
+                className={navBtn(view === "agent")}
+              >
+                Nouvel agent
+              </button>
+              <button
+                onClick={() => {
+                  window.location.hash = "#agents";
+                  setMobileNavOpen(false);
+                }}
+                className={navBtn(view === "agents")}
+              >
+                Mes agents
               </button>
             </div>
           </div>
@@ -93,7 +138,15 @@ export function DashboardLayout({ user, onLogout }: Props) {
       </header>
 
       <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-        {view === "new" ? <NewClientForm user={user} /> : <MyClientsTable user={user} />}
+        {view === "new" ? (
+          <NewClientForm user={user} />
+        ) : view === "list" ? (
+          <MyClientsTable user={user} />
+        ) : view === "agent" ? (
+          <NewAgentForm user={user} />
+        ) : (
+          <MyAgentsTable user={user} />
+        )}
       </main>
 
       <footer className="border-t border-[#C8D0C4] py-6 text-center text-xs text-[#00562B]/60">
