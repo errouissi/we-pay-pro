@@ -1,10 +1,11 @@
 // Replace this with your deployed Google Apps Script Web App URL.
-export const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyN3OuIewu6lCnpRYka6r2kuoQmyCbTMmWaPEaRbOc0103e5egMXst4XWwxkx_sHi6kJw/exec";
+export const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwuLiKPioi-4LPG-CAizG52RxpM-df48To2M5-94WIHTPyMwetsNPmvm-G47Ntn4RwqDA/exec";
 
 export type LoggedUser = {
   user_id: string;
   name: string;
   username: string;
+  role?: "admin" | "commercial";
 };
 
 export type ClientRow = {
@@ -30,6 +31,7 @@ export type AgentRow = {
   nom: string;
   prenom: string;
   telephone: string;
+  email: string;
   type_agent: string;
   document_photo_url: string;
   cin_recto_url: string;
@@ -38,6 +40,15 @@ export type AgentRow = {
   latitude: string;
   longitude: string;
   localisation_link: string;
+  agent_pdf_url: string;
+};
+
+export type UserRow = {
+  user_id: string;
+  username: string;
+  name: string;
+  role: "admin" | "commercial";
+  status: string;
 };
 
 // Google Apps Script Web Apps don't accept custom headers without triggering
@@ -84,6 +95,7 @@ export async function createAgent(
     nom: string;
     prenom: string;
     telephone: string;
+    email: string;
     typeAgent: "agence" | "détaillant";
     latitude: number;
     longitude: number;
@@ -106,4 +118,43 @@ export async function getAgents(
   user: LoggedUser,
 ): Promise<{ success: boolean; agents?: AgentRow[]; message?: string }> {
   return callScript({ action: "getAgents", userId: user.user_id });
+}
+
+export async function createUser(
+  requester: LoggedUser,
+  data: {
+    username: string;
+    password: string;
+    name: string;
+  },
+): Promise<{ success: boolean; message?: string; user_id?: string }> {
+  return callScript({
+    action: "createUser",
+    requesterId: requester.user_id,
+    role: "commercial",
+    ...data,
+  });
+}
+
+export async function getUsers(
+  requester: LoggedUser,
+): Promise<{ success: boolean; users?: UserRow[]; message?: string }> {
+  return callScript({ action: "getUsers", requesterId: requester.user_id });
+}
+
+export async function updateUser(
+  requester: LoggedUser,
+  data: {
+    user_id: string;
+    username: string;
+    name: string;
+    status: "active" | "blocked";
+    password?: string;
+  },
+): Promise<{ success: boolean; message?: string }> {
+  return callScript({
+    action: "updateUser",
+    requesterId: requester.user_id,
+    ...data,
+  });
 }

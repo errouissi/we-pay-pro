@@ -12,6 +12,7 @@ type FormState = {
   nom: string;
   prenom: string;
   telephone: string;
+  email: string;
   typeAgent: "agence" | "détaillant" | "";
   latitude: number | null;
   longitude: number | null;
@@ -26,6 +27,7 @@ const empty: FormState = {
   nom: "",
   prenom: "",
   telephone: "",
+  email: "",
   typeAgent: "",
   latitude: null,
   longitude: null,
@@ -90,6 +92,11 @@ export function NewAgentForm({ user }: Props) {
       });
       return;
     }
+    const emailTrimmed = form.email.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrimmed)) {
+      setFeedback({ type: "error", msg: "Veuillez saisir une adresse email valide." });
+      return;
+    }
     if (!form.typeAgent) {
       setFeedback({ type: "error", msg: "Veuillez sélectionner un type d'agent." });
       return;
@@ -124,6 +131,7 @@ export function NewAgentForm({ user }: Props) {
         nom: form.nom,
         prenom: form.prenom,
         telephone: normalizeMoroccanPhone(form.telephone),
+        email: emailTrimmed,
         typeAgent: form.typeAgent as "agence" | "détaillant",
         latitude: form.latitude!,
         longitude: form.longitude!,
@@ -216,6 +224,26 @@ export function NewAgentForm({ user }: Props) {
               placeholder="06 12 34 56 78"
               value={form.telephone}
               onChange={(e) => setField("telephone", e.target.value)}
+              className={inputCls}
+            />
+          </div>
+          <div>
+            <label className={labelCls}>
+              <span>
+                Email <span className="text-[#2F9E32]">*</span>
+              </span>
+              <span dir="rtl" className="text-xs font-normal text-[#00562B]/70">
+                البريد الإلكتروني
+              </span>
+            </label>
+            <input
+              type="email"
+              required
+              inputMode="email"
+              autoComplete="email"
+              placeholder="exemple@domaine.com"
+              value={form.email}
+              onChange={(e) => setField("email", e.target.value)}
               className={inputCls}
             />
           </div>

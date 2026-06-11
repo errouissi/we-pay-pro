@@ -13,10 +13,23 @@ export function MyClientsTable({ user }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<PreviewDoc | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const isAdmin = user.role === "admin";
+  const [filterDateFrom, setFilterDateFrom] = useState("");
+  const [filterDateTo, setFilterDateTo] = useState("");
+  const [filterCommercial, setFilterCommercial] = useState("");
 
+  const datePart = (s: string) => {
+    const p = String(s || "").slice(0, 10);
+    return /^\d{4}-\d{2}-\d{2}$/.test(p) ? p : "";
+  };
+
+  const commercials = [...new Set(clients.map((c) => c.created_by_name).filter(Boolean))].sort();
   const normalizedSearch = searchTerm.trim().toLowerCase();
   const sortedClients = [...clients].reverse();
   const filteredClients = sortedClients.filter((client) => {
+    if (isAdmin && filterDateFrom && datePart(client.timestamp) < filterDateFrom) return false;
+    if (isAdmin && filterDateTo && datePart(client.timestamp) > filterDateTo) return false;
+    if (isAdmin && filterCommercial && client.created_by_name !== filterCommercial) return false;
     if (!normalizedSearch) return true;
     return (
       String(client.cin || "").toLowerCase().includes(normalizedSearch) ||
@@ -58,9 +71,13 @@ export function MyClientsTable({ user }: Props) {
     <div className="rounded-2xl bg-white p-6 shadow-md ring-1 ring-black/5 sm:p-8">
       <header className="mb-6 flex flex-wrap items-end justify-between gap-3 border-b border-[#C8D0C4] pb-4">
         <div>
-          <h2 className="text-2xl font-bold text-[#003C18]">Mes clients</h2>
+          <h2 className="text-2xl font-bold text-[#003C18]">
+            {isAdmin ? "Tous les clients" : "Mes clients"}
+          </h2>
           <p className="mt-1 text-sm text-[#00562B]/80">
-            Liste des clients que vous avez enregistrés.
+            {isAdmin
+              ? "Tous les clients enregistrés par tous les commerciaux."
+              : "Liste des clients que vous avez enregistrés."}
           </p>
         </div>
         <button
@@ -74,6 +91,51 @@ export function MyClientsTable({ user }: Props) {
       </header>
 
       {error && <AlertMessage type="error">{error}</AlertMessage>}
+
+      {isAdmin && !loading && clients.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-end gap-3 rounded-xl bg-[#C8D0C4]/20 p-4 ring-1 ring-[#C8D0C4]">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-[#003C18]">Date de</label>
+            <input
+              type="date"
+              value={filterDateFrom}
+              onChange={(e) => setFilterDateFrom(e.target.value)}
+              className="rounded-lg border border-[#C8D0C4] bg-white px-3 py-2 text-sm text-[#003C18] outline-none focus:border-[#2F9E32] focus:ring-2 focus:ring-[#2F9E32]/30"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-[#003C18]">Date à</label>
+            <input
+              type="date"
+              value={filterDateTo}
+              onChange={(e) => setFilterDateTo(e.target.value)}
+              className="rounded-lg border border-[#C8D0C4] bg-white px-3 py-2 text-sm text-[#003C18] outline-none focus:border-[#2F9E32] focus:ring-2 focus:ring-[#2F9E32]/30"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-[#003C18]">Commercial</label>
+            <select
+              value={filterCommercial}
+              onChange={(e) => setFilterCommercial(e.target.value)}
+              className="rounded-lg border border-[#C8D0C4] bg-white px-3 py-2 text-sm text-[#003C18] outline-none focus:border-[#2F9E32] focus:ring-2 focus:ring-[#2F9E32]/30"
+            >
+              <option value="">Tous les commerciaux</option>
+              {commercials.map((name) => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </select>
+          </div>
+          {(filterDateFrom || filterDateTo || filterCommercial) && (
+            <button
+              type="button"
+              onClick={() => { setFilterDateFrom(""); setFilterDateTo(""); setFilterCommercial(""); }}
+              className="self-end rounded-lg border border-[#003C18]/30 px-3 py-2 text-xs font-medium text-[#003C18] transition hover:bg-[#003C18]/10"
+            >
+              Réinitialiser
+            </button>
+          )}
+        </div>
+      )}
 
       {!loading && clients.length > 0 && (
         <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -122,10 +184,11 @@ export function MyClientsTable({ user }: Props) {
         </p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] border-collapse text-sm">
+          <table className={`w-full border-collapse text-sm ${isAdmin ? "min-w-[1050px]" : "min-w-[900px]"}`}>
             <thead>
               <tr className="border-b-2 border-[#C8D0C4] text-left text-xs font-semibold uppercase tracking-wide text-[#003C18]">
                 <th className="px-3 py-3">Date</th>
+                {isAdmin && <th className="px-3 py-3">Commercial</th>}
                 <th className="px-3 py-3">Client ID</th>
                 <th className="px-3 py-3">Nom</th>
                 <th className="px-3 py-3">Prénom</th>
@@ -145,6 +208,7 @@ export function MyClientsTable({ user }: Props) {
                   className="border-b border-[#C8D0C4]/60 text-[#003C18] transition hover:bg-[#B7F000]/10"
                 >
                   <td className="px-3 py-3 whitespace-nowrap">{c.timestamp}</td>
+                  {isAdmin && <td className="px-3 py-3 text-[#00562B]/80">{c.created_by_name}</td>}
                   <td className="px-3 py-3 font-medium">{c.client_id}</td>
                   <td className="px-3 py-3">{c.nom}</td>
                   <td className="px-3 py-3">{c.prenom}</td>
