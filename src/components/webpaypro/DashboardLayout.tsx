@@ -4,14 +4,16 @@ import { NewClientForm } from "./NewClientForm";
 import { MyClientsTable } from "./MyClientsTable";
 import { NewAgentForm } from "./NewAgentForm";
 import { MyAgentsTable } from "./MyAgentsTable";
+import { UserManagement } from "./UserManagement";
 
-type View = "new" | "list" | "agent" | "agents";
+type View = "new" | "list" | "agent" | "agents" | "users";
 
 function hashToView(hash: string): View {
   if (hash === "#new") return "new";
   if (hash === "#clients") return "list";
   if (hash === "#agent") return "agent";
   if (hash === "#agents") return "agents";
+  if (hash === "#users") return "users";
   return "new";
 }
 
@@ -54,20 +56,32 @@ export function DashboardLayout({ user, onLogout }: Props) {
               Nouveau client
             </button>
             <button onClick={() => { window.location.hash = "#clients"; }} className={navBtn(view === "list")}>
-              Mes clients
+              {user.role === "admin" ? "Tous les clients" : "Mes clients"}
             </button>
             <button onClick={() => { window.location.hash = "#agent"; }} className={navBtn(view === "agent")}>
               Nouvel agent
             </button>
             <button onClick={() => { window.location.hash = "#agents"; }} className={navBtn(view === "agents")}>
-              Mes agents
+              {user.role === "admin" ? "Tous les agents" : "Mes agents"}
             </button>
+            {user.role === "admin" && (
+              <button onClick={() => { window.location.hash = "#users"; }} className={navBtn(view === "users")}>
+                Gestion utilisateurs
+              </button>
+            )}
           </nav>
 
           <div className="flex items-center gap-3">
             <div className="hidden text-right sm:block">
               <p className="text-xs text-[#00562B]/70">Connecté</p>
-              <p className="text-sm font-semibold text-[#003C18]">{user.name}</p>
+              <p className="flex items-center justify-end gap-1.5 text-sm font-semibold text-[#003C18]">
+                {user.name}
+                {user.role === "admin" && (
+                  <span className="rounded bg-[#B7F000] px-1.5 py-0.5 text-[10px] font-bold text-[#003C18]">
+                    ADMIN
+                  </span>
+                )}
+              </p>
             </div>
             <button
               onClick={onLogout}
@@ -112,7 +126,7 @@ export function DashboardLayout({ user, onLogout }: Props) {
                 }}
                 className={navBtn(view === "list")}
               >
-                Mes clients
+                {user.role === "admin" ? "Tous les clients" : "Mes clients"}
               </button>
               <button
                 onClick={() => {
@@ -130,8 +144,19 @@ export function DashboardLayout({ user, onLogout }: Props) {
                 }}
                 className={navBtn(view === "agents")}
               >
-                Mes agents
+                {user.role === "admin" ? "Tous les agents" : "Mes agents"}
               </button>
+              {user.role === "admin" && (
+                <button
+                  onClick={() => {
+                    window.location.hash = "#users";
+                    setMobileNavOpen(false);
+                  }}
+                  className={navBtn(view === "users")}
+                >
+                  Gestion utilisateurs
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -144,8 +169,12 @@ export function DashboardLayout({ user, onLogout }: Props) {
           <MyClientsTable user={user} />
         ) : view === "agent" ? (
           <NewAgentForm user={user} />
-        ) : (
+        ) : view === "agents" ? (
           <MyAgentsTable user={user} />
+        ) : user.role === "admin" ? (
+          <UserManagement user={user} />
+        ) : (
+          <NewClientForm user={user} />
         )}
       </main>
 
