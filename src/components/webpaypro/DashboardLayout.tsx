@@ -4,15 +4,20 @@ import { NewClientForm } from "./NewClientForm";
 import { MyClientsTable } from "./MyClientsTable";
 import { NewAgentForm } from "./NewAgentForm";
 import { MyAgentsTable } from "./MyAgentsTable";
+import { NewWafacashForm } from "./NewWafacashForm";
+import { MyWafacashTable } from "./MyWafacashTable";
 import { UserManagement } from "./UserManagement";
 
-type View = "new" | "list" | "agent" | "agents" | "users";
+type View = "new" | "list" | "agent" | "agents" | "wafacash" | "wafacash-list" | "users";
 
 function hashToView(hash: string): View {
   if (hash === "#new") return "new";
   if (hash === "#clients") return "list";
   if (hash === "#agent") return "agent";
   if (hash === "#agents") return "agents";
+  if (hash === "#wafacash") return "wafacash";
+  if (hash === "#wafacash-list") return "wafacash-list";
+  if (hash === "#cache") return "wafacash"; // backward compatibility with the old "Form cache" route
   if (hash === "#users") return "users";
   return "new";
 }
@@ -60,6 +65,12 @@ export function DashboardLayout({ user, onLogout }: Props) {
             </button>
             <button onClick={() => { window.location.hash = "#agent"; }} className={navBtn(view === "agent")}>
               Nouvel agent
+            </button>
+            <button onClick={() => { window.location.hash = "#wafacash"; }} className={navBtn(view === "wafacash")}>
+              Wafacash
+            </button>
+            <button onClick={() => { window.location.hash = "#wafacash-list"; }} className={navBtn(view === "wafacash-list")}>
+              {user.role === "admin" ? "Tous les Wafacash" : "Mes Wafacash"}
             </button>
             <button onClick={() => { window.location.hash = "#agents"; }} className={navBtn(view === "agents")}>
               {user.role === "admin" ? "Tous les agents" : "Mes agents"}
@@ -139,6 +150,24 @@ export function DashboardLayout({ user, onLogout }: Props) {
               </button>
               <button
                 onClick={() => {
+                  window.location.hash = "#wafacash";
+                  setMobileNavOpen(false);
+                }}
+                className={navBtn(view === "wafacash")}
+              >
+                Wafacash
+              </button>
+              <button
+                onClick={() => {
+                  window.location.hash = "#wafacash-list";
+                  setMobileNavOpen(false);
+                }}
+                className={navBtn(view === "wafacash-list")}
+              >
+                {user.role === "admin" ? "Tous les Wafacash" : "Mes Wafacash"}
+              </button>
+              <button
+                onClick={() => {
                   window.location.hash = "#agents";
                   setMobileNavOpen(false);
                 }}
@@ -171,6 +200,10 @@ export function DashboardLayout({ user, onLogout }: Props) {
           <NewAgentForm user={user} />
         ) : view === "agents" ? (
           <MyAgentsTable user={user} />
+        ) : view === "wafacash" ? (
+          <NewWafacashForm user={user} />
+        ) : view === "wafacash-list" ? (
+          <MyWafacashTable user={user} />
         ) : user.role === "admin" ? (
           <UserManagement user={user} />
         ) : (

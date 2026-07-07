@@ -25,7 +25,7 @@ This project used to target TanStack Start SSR on Cloudflare Workers; the SSR sc
 
 Single-page app (`src/App.tsx`) that toggles between `LoginPage` and `DashboardLayout` based on a `LoggedUser` persisted in `localStorage` under `wpp_user` (`STORAGE_KEY` in `api.ts`). All app UI lives in `src/components/webpaypro/`. UI text is French/Arabic for an internal Moroccan workflow.
 
-`DashboardLayout` has five navigation views: **Nouveau client**, **Mes clients**, **Nouvel agent**, **Mes agents**, and **Gestion utilisateurs** (admin-only, hash `#users`).
+`DashboardLayout` has seven navigation views: **Nouveau client**, **Mes clients**, **Nouvel agent**, **Mes agents**, **Wafacash**, **Mes Wafacash**, and **Gestion utilisateurs** (admin-only, hash `#users`).
 
 Notable in-app components:
 - `LoginPage` / `DashboardLayout` — auth gate + shell.
@@ -33,15 +33,19 @@ Notable in-app components:
 - `MyClientsTable` — local search (CIN/nom/prénom/téléphone/opérateur, case-insensitive, trimmed), newest-first via `[...clients].reverse()`, opens `DocumentPreviewModal` for each Drive link.
 - `NewAgentForm` — registers agents; see Agent workflow below.
 - `MyAgentsTable` — displays agents created by the logged-in user; see Agent list below.
+- `NewWafacashForm` — registers Wafacash entries; see Wafacash workflow below. (Formerly named "Form cache" / `NewCacheForm` — renamed to Wafacash; `#cache` still maps to this view for backward compatibility.)
+- `MyWafacashTable` — displays Wafacash entries; see Wafacash list below.
 - `UserManagement` — admin-only page at `#users`; create commercial users + list all users; see User management below.
 - `DocumentPreviewModal` — extracts the Drive `FILE_ID`, renders `https://drive.google.com/thumbnail?id=<id>&sz=w1600` in an `<img>` with CSS-transform zoom (steps 0.25, range [0.5, 4]); on `onError` falls back to an `<iframe>` at `https://drive.google.com/file/d/<id>/preview` (handles PDFs and images Drive blocks from hotlinking). Always shows the original Drive link via "Ouvrir dans Google Drive".
 
 ### Backend = Google Apps Script Web App
 
-There is no first-party backend. `src/components/webpaypro/api.ts` posts JSON to a single Google Apps Script Web App URL (`GOOGLE_SCRIPT_URL`). All actions (`login`, `createClient`, `getClients`, `createAgent`, `getAgents`, `createUser`, `getUsers`) are dispatched by an `action` field in the body. Two constraints to respect:
+There is no first-party backend. `src/components/webpaypro/api.ts` posts JSON to a single Google Apps Script Web App URL (`GOOGLE_SCRIPT_URL`). All actions (`login`, `createClient`, `getClients`, `createAgent`, `getAgents`, `createWafacash`, `getWafacash`, `createUser`, `getUsers`) are dispatched by an `action` field in the body. `doPost` also still accepts the legacy `createCache` action name as an alias that routes to the same Wafacash handler, so any stale cached frontend bundle keeps working. Two constraints to respect:
 
 - **No custom headers.** Apps Script Web Apps would trigger a CORS preflight and reject it. `callScript` deliberately sends a plain-text body and lets the script JSON-parse it server-side. Don't add `Content-Type: application/json` or auth headers.
 - **File uploads are base64.** `fileToBase64` strips the data-URL prefix; uploads are sent as `{ name, type, base64 }` objects inline in the JSON payload. Client-side size cap is 10 MB per file (`fileValidation.ts`) — enforced at selection time in `FileInput` and as a defense check in each form's submit handler.
+- **Drive folder organization.** New uploads (client CIN/pièce jointe, agent photos/CIN/generated PDF, and Wafacash CIN recto/verso) are no longer written directly into the root `DRIVE_FOLDER_ID` folder. `getOrCreatePersonFolder(parentFolder, nom, prenom)` creates (or reuses) a subfolder named `sanitizeFolderName(nom)-sanitizeFolderName(prenom)` inside the root folder, and all uploads for that submission go there. This applies to `handleCreateClient`, `handleCreateAgent` (including the generated agent PDF, since it reuses the same `folder` reference), and `handleCreateWafacash`. File URLs are still `https://drive.google.com/file/d/<fileId>/view`, keyed by file ID — moving the containing folder does not change or break any existing link. Files uploaded before this change remain in the root folder; only new uploads use the person subfolder.
+- **Drive file naming.** New uploads are named via `buildFileLabel(baseLabel, nom, prenom)`, which appends the sanitized person name to the base label (e.g. `cin_recto_dupont-jean`, `photo_document_dupont-jean`). Used for client (`cin_recto`, `cin_verso`, `piece_jointe`), agent (`photo_document`, `cin_recto`, `cin_verso`, `photo_local`), and Wafacash (`cin_recto`, `cin_verso`) uploads. The final filename is still `${id}_${label}_${Date.now()}${extension}` — only the `label` portion changed, so uniqueness (ID + timestamp) is unaffected. Files uploaded before this change keep their old (non-name-suffixed) filenames.
 
 ### Agent workflow
 
@@ -56,6 +60,23 @@ The frontend captures latitude/longitude and generates `localisationLink` as `ht
 ### Agent list
 
 `MyAgentsTable` displays agents created by the currently logged-in user. It calls `getAgents()` from `api.ts`. Apps Script filters by `created_by_user_id`. Local search supports nom, prénom, téléphone, email, and type_agent. File columns (photo document, CIN recto, CIN verso, photo local) open `DocumentPreviewModal`. The localisation column renders as a plain `<a target="_blank">` link to Google Maps — **not** via `DocumentPreviewModal`, because `localisation_link` is a Maps URL, not a Drive file. The `agent_pdf_url` column renders as a plain `<a target="_blank">` link labelled "Ouvrir PDF"; shows `—` when empty (e.g. for agents registered before PDF generation was added).
+
+### Wafacash workflow
+
+`NewWafacashForm` registers Wafacash entries with these required fields:
+- nom, prénom, téléphone (Moroccan: `05|06|07` + 8 digits, same validation as the agent form), adresse
+- GPS localisation via `navigator.geolocation` — **mandatory before submit**, same pattern as client/agent forms
+- CIN recto, CIN verso (files)
+
+The frontend captures latitude/longitude and generates `localisationLink` as `https://www.google.com/maps?q=${lat},${lng}`, same as the other forms. Files are uploaded using the same base64 + Google Drive flow, into the submission's person subfolder (see Drive folder organization above), with filenames built via `buildFileLabel` (see Drive file naming above). Records are saved into the Google Sheet tab `Wafacash` with columns: `created_at`, `wafacash_id`, `nom`, `prenom`, `telephone`, `adresse`, `latitude`, `longitude`, `localisation_link`, `cin_recto_url`, `cin_verso_url`, `created_by_user_id`, `created_by_username`. Accessible to both admin and commercial users.
+
+This feature was originally named "Form cache" (`NewCacheForm`, `createCache` action, `Caches` sheet). It was renamed to Wafacash; the old `Caches` sheet and any data in it were left untouched (not migrated, not deleted) — new submissions only go to the `Wafacash` sheet. `#cache` still routes to the Wafacash form for backward compatibility, and the Apps Script `createCache` action is still accepted as an alias for `createWafacash` (see Backend section above). `api.ts` also still exports `CacheRow`/`createCache` as deprecated aliases of `WafacashRow`/`createWafacash` for the same reason — new code should use the Wafacash names.
+
+`telephone` was added after the initial Wafacash launch. `handleCreateWafacash` normalizes/validates it the same way as client/agent phones (`normalizeMoroccanPhone` + `isValidMoroccanPhone`) and writes it as text (leading-zero-preserving trick, same as `createClient`/`createAgent`). Since pre-existing `Wafacash` sheets were created before this column existed, `ensureWafacashTelephoneColumn(sheet)` inserts a `telephone` header column right after `prenom` the first time it's missing (called from both `handleCreateWafacash` and `handleGetWafacash`); old rows keep their data shifted right with a blank telephone cell. The `createWafacash_success` backup record also includes `telephone`.
+
+### Wafacash list
+
+`MyWafacashTable` displays Wafacash entries via `getWafacash()` from `api.ts`, same pattern as `MyAgentsTable`/`getAgents()`. Server-side role enforcement in `handleGetWafacash` via `getUserRole(userId)`: admin sees all rows, commercial sees only rows where `created_by_user_id` matches. Local search covers nom, prénom, téléphone, adresse. Newest-first via `[...wafacash].reverse()`. CIN recto/verso columns open `DocumentPreviewModal`; localisation column is a plain `<a target="_blank">` link to Google Maps (not a Drive file, same reasoning as the agent list). Admin gets the same date-range + commercial filters as the client/agent tables. Rows created before the `telephone` field existed simply show a blank Téléphone cell.
 
 ### Role system
 

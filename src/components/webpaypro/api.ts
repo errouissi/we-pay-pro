@@ -1,5 +1,5 @@
 // Replace this with your deployed Google Apps Script Web App URL.
-export const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwuLiKPioi-4LPG-CAizG52RxpM-df48To2M5-94WIHTPyMwetsNPmvm-G47Ntn4RwqDA/exec";
+export const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycby4nyvKPAdToMaYSjW6xpWdlQ76SmQpDOAHtw7rJyQFYuiVn1Ejto8Yu2Xv3Q4jUmQXLA/exec";
 
 export type LoggedUser = {
   user_id: string;
@@ -42,6 +42,25 @@ export type AgentRow = {
   localisation_link: string;
   agent_pdf_url: string;
 };
+
+export type WafacashRow = {
+  created_at: string;
+  wafacash_id: string;
+  nom: string;
+  prenom: string;
+  telephone: string;
+  adresse: string;
+  latitude: string;
+  longitude: string;
+  localisation_link: string;
+  cin_recto_url: string;
+  cin_verso_url: string;
+  created_by_user_id: string;
+  created_by_username: string;
+};
+
+/** @deprecated use WafacashRow — kept as a backward-compatible alias. */
+export type CacheRow = WafacashRow;
 
 export type UserRow = {
   user_id: string;
@@ -118,6 +137,55 @@ export async function getAgents(
   user: LoggedUser,
 ): Promise<{ success: boolean; agents?: AgentRow[]; message?: string }> {
   return callScript({ action: "getAgents", userId: user.user_id });
+}
+
+export async function createWafacash(
+  user: LoggedUser,
+  data: {
+    nom: string;
+    prenom: string;
+    telephone: string;
+    adresse: string;
+    latitude: number;
+    longitude: number;
+    localisationLink: string;
+    cinRecto: FileUpload;
+    cinVerso: FileUpload;
+  },
+): Promise<{ success: boolean; message?: string }> {
+  return callScript({
+    action: "createWafacash",
+    userId: user.user_id,
+    userName: user.username,
+    ...data,
+  });
+}
+
+/** @deprecated use createWafacash — kept as a backward-compatible alias. */
+export async function createCache(
+  user: LoggedUser,
+  data: {
+    nom: string;
+    prenom: string;
+    telephone: string;
+    adresse: string;
+    latitude: number;
+    longitude: number;
+    localisationLink: string;
+    cinRecto: FileUpload;
+    cinVerso: FileUpload;
+  },
+): Promise<{ success: boolean; message?: string }> {
+  return createWafacash(user, data);
+}
+
+export async function getWafacash(
+  user: LoggedUser,
+): Promise<{ success: boolean; wafacash?: WafacashRow[]; message?: string }> {
+  return callScript({
+    action: "getWafacash",
+    userId: user.user_id,
+  });
 }
 
 export async function createUser(
