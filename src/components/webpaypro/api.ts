@@ -1,5 +1,5 @@
 // Replace this with your deployed Google Apps Script Web App URL.
-export const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycby4nyvKPAdToMaYSjW6xpWdlQ76SmQpDOAHtw7rJyQFYuiVn1Ejto8Yu2Xv3Q4jUmQXLA/exec";
+export const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw2SVIacwchdc4p2D-RDS8_miCv4kU2NPRR_Sh7eTRT4qlMKUN1wCwDHvzbqsu3prekhA/exec";
 
 export type LoggedUser = {
   user_id: string;
