@@ -596,7 +596,7 @@ function handleCreateWafacash(body) {
   const longitude = String(body.longitude).trim();
   const localisationLink = String(body.localisationLink || "").trim();
 
-  if (!body.cinRecto || !body.cinVerso) {
+  if (!body.cinRecto || !body.cinVerso || !body.photoLocal) {
     throw new Error("All files are required");
   }
 
@@ -607,9 +607,11 @@ function handleCreateWafacash(body) {
 
   const cinRecto = uploadBase64File(folder, body.cinRecto, wafacashId, buildFileLabel("cin_recto", body.nom, body.prenom));
   const cinVerso = uploadBase64File(folder, body.cinVerso, wafacashId, buildFileLabel("cin_verso", body.nom, body.prenom));
+  const photoLocal = uploadBase64File(folder, body.photoLocal, wafacashId, buildFileLabel("photo_local", body.nom, body.prenom));
 
   const sheet = getOrCreateWafacashSheet();
   const telephoneColumnIndex = ensureWafacashTelephoneColumn(sheet);
+  ensureWafacashPhotoLocalColumn(sheet);
 
   sheet.appendRow([
     new Date(),
@@ -623,6 +625,7 @@ function handleCreateWafacash(body) {
     localisationLink,
     cinRecto.url,
     cinVerso.url,
+    photoLocal.url,
     body.userId,
     body.userName,
   ]);
@@ -646,6 +649,7 @@ function handleCreateWafacash(body) {
     adresse: body.adresse,
     cin_recto_url: cinRecto.url,
     cin_verso_url: cinVerso.url,
+    photo_local_url: photoLocal.url,
     latitude: latitude,
     longitude: longitude,
     localisation_link: localisationLink
@@ -673,6 +677,7 @@ function handleGetWafacash(body) {
   }
 
   ensureWafacashTelephoneColumn(sheet);
+  ensureWafacashPhotoLocalColumn(sheet);
 
   const values = sheet.getDataRange().getValues();
 
@@ -703,6 +708,7 @@ function handleGetWafacash(body) {
       localisation_link: w.localisation_link || "",
       cin_recto_url: w.cin_recto_url || "",
       cin_verso_url: w.cin_verso_url || "",
+      photo_local_url: w.photo_local_url || "",
       created_by_user_id: w.created_by_user_id || "",
       created_by_username: w.created_by_username || "",
     }));
@@ -1165,6 +1171,7 @@ function getOrCreateWafacashSheet() {
       "localisation_link",
       "cin_recto_url",
       "cin_verso_url",
+      "photo_local_url",
       "created_by_user_id",
       "created_by_username",
     ]);
@@ -1183,6 +1190,20 @@ function ensureWafacashTelephoneColumn(sheet) {
   const insertAt = colMap.prenom ? colMap.prenom + 1 : sheet.getLastColumn() + 1;
   sheet.insertColumnBefore(insertAt);
   sheet.getRange(1, insertAt).setValue("telephone");
+  return insertAt;
+}
+
+// Adds the "photo_local_url" header to a pre-existing Wafacash sheet that
+// predates this field. Inserts the column right after "cin_verso_url" so old
+// rows keep all their data (shifted right) with a blank photo_local_url cell;
+// no-op if present.
+function ensureWafacashPhotoLocalColumn(sheet) {
+  const colMap = getSheetColumnMap(sheet);
+  if (colMap.photo_local_url) return colMap.photo_local_url;
+
+  const insertAt = colMap.cin_verso_url ? colMap.cin_verso_url + 1 : sheet.getLastColumn() + 1;
+  sheet.insertColumnBefore(insertAt);
+  sheet.getRange(1, insertAt).setValue("photo_local_url");
   return insertAt;
 }
 

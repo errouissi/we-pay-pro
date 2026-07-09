@@ -18,6 +18,7 @@ type FormState = {
   localisationLink: string;
   cinRecto: File | null;
   cinVerso: File | null;
+  photoLocal: File | null;
 };
 
 const empty: FormState = {
@@ -30,6 +31,7 @@ const empty: FormState = {
   localisationLink: "",
   cinRecto: null,
   cinVerso: null,
+  photoLocal: null,
 };
 
 function normalizeMoroccanPhone(value: string) {
@@ -93,11 +95,11 @@ export function NewWafacashForm({ user }: Props) {
       });
       return;
     }
-    if (!form.cinRecto || !form.cinVerso) {
+    if (!form.cinRecto || !form.cinVerso || !form.photoLocal) {
       setFeedback({ type: "error", msg: "Veuillez joindre tous les fichiers requis." });
       return;
     }
-    for (const f of [form.cinRecto, form.cinVerso]) {
+    for (const f of [form.cinRecto, form.cinVerso, form.photoLocal]) {
       const msg = validateFile(f);
       if (msg) {
         setFeedback({ type: "error", msg });
@@ -106,9 +108,10 @@ export function NewWafacashForm({ user }: Props) {
     }
     setSubmitting(true);
     try {
-      const [cinRecto, cinVerso] = await Promise.all([
+      const [cinRecto, cinVerso, photoLocal] = await Promise.all([
         fileToBase64(form.cinRecto),
         fileToBase64(form.cinVerso),
+        fileToBase64(form.photoLocal),
       ]);
       const res = await createWafacash(user, {
         nom: form.nom,
@@ -120,6 +123,7 @@ export function NewWafacashForm({ user }: Props) {
         localisationLink: form.localisationLink,
         cinRecto,
         cinVerso,
+        photoLocal,
       });
       if (res.success) {
         setForm(empty);
@@ -266,6 +270,14 @@ export function NewWafacashForm({ user }: Props) {
               required
               value={form.cinVerso}
               onChange={(f) => setField("cinVerso", f)}
+            />
+            <FileInput
+              label="Photo du local / magasin"
+              arabic="صورة المحل / المتجر"
+              name="photoLocal"
+              required
+              value={form.photoLocal}
+              onChange={(f) => setField("photoLocal", f)}
             />
           </div>
         </div>

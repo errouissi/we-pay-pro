@@ -1,5 +1,5 @@
 // Replace this with your deployed Google Apps Script Web App URL.
-export const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw2SVIacwchdc4p2D-RDS8_miCv4kU2NPRR_Sh7eTRT4qlMKUN1wCwDHvzbqsu3prekhA/exec";
+export const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxs-DUyfG_wcPYtXNSHs2nNavXSNUYWh4TYhGSc3XCLrYXJX1FtZhiMaFLCSOmx0_qBJg/exec";
 
 export type LoggedUser = {
   user_id: string;
@@ -55,6 +55,7 @@ export type WafacashRow = {
   localisation_link: string;
   cin_recto_url: string;
   cin_verso_url: string;
+  photo_local_url: string;
   created_by_user_id: string;
   created_by_username: string;
 };
@@ -151,6 +152,7 @@ export async function createWafacash(
     localisationLink: string;
     cinRecto: FileUpload;
     cinVerso: FileUpload;
+    photoLocal: FileUpload;
   },
 ): Promise<{ success: boolean; message?: string }> {
   return callScript({
@@ -174,6 +176,7 @@ export async function createCache(
     localisationLink: string;
     cinRecto: FileUpload;
     cinVerso: FileUpload;
+    photoLocal: FileUpload;
   },
 ): Promise<{ success: boolean; message?: string }> {
   return createWafacash(user, data);

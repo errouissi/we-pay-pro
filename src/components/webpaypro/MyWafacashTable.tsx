@@ -180,7 +180,7 @@ export function MyWafacashTable({ user }: Props) {
         </p>
       ) : (
         <div className="overflow-x-auto">
-          <table className={`w-full border-collapse text-sm ${isAdmin ? "min-w-[1250px]" : "min-w-[1100px]"}`}>
+          <table className={`w-full border-collapse text-sm ${isAdmin ? "min-w-[1350px]" : "min-w-[1200px]"}`}>
             <thead>
               <tr className="border-b-2 border-[#C8D0C4] text-left text-xs font-semibold uppercase tracking-wide text-[#003C18]">
                 <th className="px-3 py-3">Date</th>
@@ -191,6 +191,7 @@ export function MyWafacashTable({ user }: Props) {
                 <th className="px-3 py-3">Adresse</th>
                 <th className="px-3 py-3">CIN Recto</th>
                 <th className="px-3 py-3">CIN Verso</th>
+                <th className="px-3 py-3">Photo du local</th>
                 <th className="px-3 py-3">Localisation</th>
               </tr>
             </thead>
@@ -223,6 +224,19 @@ export function MyWafacashTable({ user }: Props) {
                     >
                       Voir Verso
                     </button>
+                  </td>
+                  <td className="px-3 py-3">
+                    {w.photo_local_url ? (
+                      <button
+                        type="button"
+                        className={linkBtn}
+                        onClick={() => setPreview({ title: "Photo du local", url: w.photo_local_url })}
+                      >
+                        Voir photo
+                      </button>
+                    ) : (
+                      <span className="text-[#00562B]/50">—</span>
+                    )}
                   </td>
                   <td className="px-3 py-3">
                     <a
