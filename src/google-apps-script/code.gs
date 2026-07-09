@@ -205,6 +205,9 @@ function handleLogin(body) {
 }
 
 function handleCreateClient(body) {
+  var start = Date.now();
+  Logger.log("createClient start");
+
   const requiredFields = [
     "userId",
     "userName",
@@ -254,9 +257,14 @@ function handleCreateClient(body) {
 
   const clientId = generateClientId();
 
+  Logger.log("before upload files: " + (Date.now() - start));
+
   const cinRectoLink = uploadBase64File(folder, body.cinRecto, clientId, buildFileLabel("cin_recto", body.nom, body.prenom)).url;
+  Logger.log("after cinRecto upload: " + (Date.now() - start));
   const cinVersoLink = uploadBase64File(folder, body.cinVerso, clientId, buildFileLabel("cin_verso", body.nom, body.prenom)).url;
+  Logger.log("after cinVerso upload: " + (Date.now() - start));
   const pieceJointeLink = uploadBase64File(folder, body.pieceJointe, clientId, buildFileLabel("piece_jointe", body.nom, body.prenom)).url;
+  Logger.log("after pieceJointe upload: " + (Date.now() - start));
 
   const sheet = getSheet(CLIENTS_SHEET_NAME);
 
@@ -287,6 +295,8 @@ function handleCreateClient(body) {
     .setNumberFormat("@")
     .setValue("'" + normalizedTelephone);
 
+  Logger.log("after sheet append: " + (Date.now() - start));
+
   appendJsonBackup("clients", {
     event: "createClient_success",
     created_at: formatDate(new Date()),
@@ -306,6 +316,9 @@ function handleCreateClient(body) {
     longitude: longitude,
     localisation_link: localisationLink
   });
+
+  Logger.log("after backup: " + (Date.now() - start));
+  Logger.log("createClient done: " + (Date.now() - start));
 
   return jsonResponse({
     success: true,
@@ -368,6 +381,9 @@ function handleGetClients(body) {
 }
 
 function handleCreateAgent(body) {
+  var start = Date.now();
+  Logger.log("createAgent start");
+
   const requiredFields = [
     "userId",
     "userName",
@@ -420,10 +436,16 @@ function handleCreateAgent(body) {
   const folder = getOrCreatePersonFolder(rootFolder, body.nom, body.prenom);
   const agentId = generateAgentId();
 
+  Logger.log("before upload files: " + (Date.now() - start));
+
   const photoDocument = uploadBase64File(folder, body.photoDocument, agentId, buildFileLabel("photo_document", body.nom, body.prenom));
+  Logger.log("after photoDocument upload: " + (Date.now() - start));
   const cinRecto      = uploadBase64File(folder, body.cinRecto,       agentId, buildFileLabel("cin_recto", body.nom, body.prenom));
+  Logger.log("after cinRecto upload: " + (Date.now() - start));
   const cinVerso      = uploadBase64File(folder, body.cinVerso,       agentId, buildFileLabel("cin_verso", body.nom, body.prenom));
+  Logger.log("after cinVerso upload: " + (Date.now() - start));
   const photoLocal    = uploadBase64File(folder, body.photoLocal,     agentId, buildFileLabel("photo_local", body.nom, body.prenom));
+  Logger.log("after photoLocal upload: " + (Date.now() - start));
 
   const sheet = getOrCreateAgentsSheet();
 
@@ -454,6 +476,8 @@ function handleCreateAgent(body) {
     .setNumberFormat("@")
     .setValue("'" + normalizedTelephone);
 
+  Logger.log("after sheet append: " + (Date.now() - start));
+
   // Generate PDF after the row is saved — failure here does not lose the agent
   var agentPdfUrl = "";
   var agentPdfError = "";
@@ -481,6 +505,8 @@ function handleCreateAgent(body) {
     sheet.getRange(lastRow, pdfColIndex).setValue(agentPdfUrl);
   }
 
+  Logger.log("after pdf generation: " + (Date.now() - start));
+
   appendJsonBackup("agents", {
     event: "createAgent_success",
     created_at: formatDate(new Date()),
@@ -502,6 +528,9 @@ function handleCreateAgent(body) {
     agent_pdf_url: agentPdfUrl || "",
     pdf_error: agentPdfError || ""
   });
+
+  Logger.log("after backup: " + (Date.now() - start));
+  Logger.log("createAgent done: " + (Date.now() - start));
 
   return jsonResponse({
     success: true,
@@ -564,6 +593,9 @@ function handleGetAgents(body) {
 }
 
 function handleCreateWafacash(body) {
+  var start = Date.now();
+  Logger.log("createWafacash start");
+
   const requiredFields = [
     "userId",
     "userName",
@@ -605,9 +637,14 @@ function handleCreateWafacash(body) {
 
   const wafacashId = generateWafacashId();
 
+  Logger.log("before upload files: " + (Date.now() - start));
+
   const cinRecto = uploadBase64File(folder, body.cinRecto, wafacashId, buildFileLabel("cin_recto", body.nom, body.prenom));
+  Logger.log("after cinRecto upload: " + (Date.now() - start));
   const cinVerso = uploadBase64File(folder, body.cinVerso, wafacashId, buildFileLabel("cin_verso", body.nom, body.prenom));
+  Logger.log("after cinVerso upload: " + (Date.now() - start));
   const photoLocal = uploadBase64File(folder, body.photoLocal, wafacashId, buildFileLabel("photo_local", body.nom, body.prenom));
+  Logger.log("after photoLocal upload: " + (Date.now() - start));
 
   const sheet = getOrCreateWafacashSheet();
   const telephoneColumnIndex = ensureWafacashTelephoneColumn(sheet);
@@ -637,6 +674,8 @@ function handleCreateWafacash(body) {
     .setNumberFormat("@")
     .setValue("'" + normalizedTelephone);
 
+  Logger.log("after sheet append: " + (Date.now() - start));
+
   appendJsonBackup("wafacash", {
     event: "createWafacash_success",
     created_at: formatDate(new Date()),
@@ -654,6 +693,9 @@ function handleCreateWafacash(body) {
     longitude: longitude,
     localisation_link: localisationLink
   });
+
+  Logger.log("after backup: " + (Date.now() - start));
+  Logger.log("createWafacash done: " + (Date.now() - start));
 
   return jsonResponse({
     success: true,

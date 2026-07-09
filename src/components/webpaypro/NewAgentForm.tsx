@@ -4,7 +4,8 @@ import { FileInput } from "./FileInput";
 import { AlertMessage } from "./AlertMessage";
 import { SuccessModal } from "./SuccessModal";
 import { FullScreenLoadingOverlay } from "./FullScreenLoadingOverlay";
-import { validateFile } from "./fileValidation";
+import { validateFile, MAX_COMPRESSED_FILE_SIZE_MB } from "./fileValidation";
+import { compressImageFile } from "./imageCompression";
 
 type Props = { user: LoggedUser };
 
@@ -112,20 +113,27 @@ export function NewAgentForm({ user }: Props) {
       setFeedback({ type: "error", msg: "Veuillez joindre tous les fichiers requis." });
       return;
     }
-    for (const f of [form.photoDocument, form.cinRecto, form.cinVerso, form.photoLocal]) {
-      const msg = validateFile(f);
-      if (msg) {
-        setFeedback({ type: "error", msg });
-        return;
-      }
-    }
     setSubmitting(true);
     try {
+      const [photoDocumentFile, cinRectoFile, cinVersoFile, photoLocalFile] = await Promise.all([
+        compressImageFile(form.photoDocument),
+        compressImageFile(form.cinRecto),
+        compressImageFile(form.cinVerso),
+        compressImageFile(form.photoLocal),
+      ]);
+      for (const f of [photoDocumentFile, cinRectoFile, cinVersoFile, photoLocalFile]) {
+        const msg = validateFile(f, MAX_COMPRESSED_FILE_SIZE_MB);
+        if (msg) {
+          setFeedback({ type: "error", msg });
+          setSubmitting(false);
+          return;
+        }
+      }
       const [photoDocument, cinRecto, cinVerso, photoLocal] = await Promise.all([
-        fileToBase64(form.photoDocument),
-        fileToBase64(form.cinRecto),
-        fileToBase64(form.cinVerso),
-        fileToBase64(form.photoLocal),
+        fileToBase64(photoDocumentFile),
+        fileToBase64(cinRectoFile),
+        fileToBase64(cinVersoFile),
+        fileToBase64(photoLocalFile),
       ]);
       const res = await createAgent(user, {
         nom: form.nom,
@@ -315,7 +323,7 @@ export function NewAgentForm({ user }: Props) {
 
         <div className="rounded-xl bg-[#C8D0C4]/20 p-4 ring-1 ring-[#C8D0C4]">
           <p className="mb-4 text-xs text-[#003C18]/80">
-            Formats acceptés : image ou PDF. Taille maximale : 10 MB par fichier.
+            Formats acceptés : image ou PDF. Les images sont compressées automatiquement avant l'envoi.
           </p>
           <div className="grid gap-5 sm:grid-cols-2">
             <FileInput
@@ -368,8 +376,8 @@ export function NewAgentForm({ user }: Props) {
 
       <FullScreenLoadingOverlay
         isVisible={submitting}
-        title="Enregistrement en cours..."
-        message="Veuillez patienter, ne fermez pas cette page."
+        title="Téléchargement des documents..."
+        message="Compression et envoi des images en cours. Veuillez patienter quelques secondes."
       />
 
       <SuccessModal
