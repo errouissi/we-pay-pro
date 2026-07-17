@@ -1,5 +1,5 @@
 // Replace this with your deployed Google Apps Script Web App URL.
-export const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwrGy-4qSW7fbGVlknBZfjuzOyhKIPiNvZpckUEK_sUibeiU4s693SRwzSL7pq4q6oGVg/exec";
+export const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz6IIzwiO81TELZY41GsR0luTK7b89becfNaNJuTB_g5fC_E1L543B3drmJ22Fr8mE/exec";
 
 export type LoggedUser = {
   user_id: string;
@@ -62,6 +62,25 @@ export type WafacashRow = {
 
 /** @deprecated use WafacashRow — kept as a backward-compatible alias. */
 export type CacheRow = WafacashRow;
+
+export type WePayProRow = {
+  created_at: string;
+  dossier_number: string;
+  nom: string;
+  prenom: string;
+  cin: string;
+  ville: string;
+  telephone: string;
+  operator: string;
+  cin_recto_url: string;
+  cin_verso_url: string;
+  piece_jointe_url: string;
+  latitude: string;
+  longitude: string;
+  localisation_link: string;
+  created_by_user_id: string;
+  created_by_username: string;
+};
 
 export type UserRow = {
   user_id: string;
@@ -189,6 +208,38 @@ export async function getWafacash(
     action: "getWafacash",
     userId: user.user_id,
   });
+}
+
+export async function createWePayPro(
+  user: LoggedUser,
+  data: {
+    numeroDossier: string;
+    nom: string;
+    prenom: string;
+    cin: string;
+    ville: string;
+    telephone: string;
+    operator: string;
+    latitude: number;
+    longitude: number;
+    localisationLink: string;
+    cinRecto: FileUpload;
+    cinVerso: FileUpload;
+    pieceJointe: FileUpload;
+  },
+): Promise<{ success: boolean; message?: string; dossier_number?: string }> {
+  return callScript({
+    action: "createWePayPro",
+    userId: user.user_id,
+    userName: user.username,
+    ...data,
+  });
+}
+
+export async function getWePayPro(
+  user: LoggedUser,
+): Promise<{ success: boolean; wepaypro?: WePayProRow[]; message?: string }> {
+  return callScript({ action: "getWePayPro", userId: user.user_id });
 }
 
 export async function createUser(

@@ -6,9 +6,20 @@ import { NewAgentForm } from "./NewAgentForm";
 import { MyAgentsTable } from "./MyAgentsTable";
 import { NewWafacashForm } from "./NewWafacashForm";
 import { MyWafacashTable } from "./MyWafacashTable";
+import { NewWePayProForm } from "./NewWePayProForm";
+import { MyWePayProTable } from "./MyWePayProTable";
 import { UserManagement } from "./UserManagement";
 
-type View = "new" | "list" | "agent" | "agents" | "wafacash" | "wafacash-list" | "users";
+type View =
+  | "new"
+  | "list"
+  | "agent"
+  | "agents"
+  | "wafacash"
+  | "wafacash-list"
+  | "wepaypro"
+  | "wepaypro-list"
+  | "users";
 
 function hashToView(hash: string): View {
   if (hash === "#new") return "new";
@@ -18,6 +29,8 @@ function hashToView(hash: string): View {
   if (hash === "#wafacash") return "wafacash";
   if (hash === "#wafacash-list") return "wafacash-list";
   if (hash === "#cache") return "wafacash"; // backward compatibility with the old "Form cache" route
+  if (hash === "#wepaypro") return "wepaypro";
+  if (hash === "#wepaypro-list") return "wepaypro-list";
   if (hash === "#users") return "users";
   return "new";
 }
@@ -71,6 +84,12 @@ export function DashboardLayout({ user, onLogout }: Props) {
             </button>
             <button onClick={() => { window.location.hash = "#wafacash-list"; }} className={navBtn(view === "wafacash-list")}>
               {user.role === "admin" ? "Tous les Wafacash" : "Mes Wafacash"}
+            </button>
+            <button onClick={() => { window.location.hash = "#wepaypro"; }} className={navBtn(view === "wepaypro")}>
+              We Pay Pro Form
+            </button>
+            <button onClick={() => { window.location.hash = "#wepaypro-list"; }} className={navBtn(view === "wepaypro-list")}>
+              {user.role === "admin" ? "Tous les We Pay Pro" : "Mes We Pay Pro"}
             </button>
             <button onClick={() => { window.location.hash = "#agents"; }} className={navBtn(view === "agents")}>
               {user.role === "admin" ? "Tous les agents" : "Mes agents"}
@@ -168,6 +187,24 @@ export function DashboardLayout({ user, onLogout }: Props) {
               </button>
               <button
                 onClick={() => {
+                  window.location.hash = "#wepaypro";
+                  setMobileNavOpen(false);
+                }}
+                className={navBtn(view === "wepaypro")}
+              >
+                We Pay Pro Form
+              </button>
+              <button
+                onClick={() => {
+                  window.location.hash = "#wepaypro-list";
+                  setMobileNavOpen(false);
+                }}
+                className={navBtn(view === "wepaypro-list")}
+              >
+                {user.role === "admin" ? "Tous les We Pay Pro" : "Mes We Pay Pro"}
+              </button>
+              <button
+                onClick={() => {
                   window.location.hash = "#agents";
                   setMobileNavOpen(false);
                 }}
@@ -204,6 +241,10 @@ export function DashboardLayout({ user, onLogout }: Props) {
           <NewWafacashForm user={user} />
         ) : view === "wafacash-list" ? (
           <MyWafacashTable user={user} />
+        ) : view === "wepaypro" ? (
+          <NewWePayProForm user={user} />
+        ) : view === "wepaypro-list" ? (
+          <MyWePayProTable user={user} />
         ) : user.role === "admin" ? (
           <UserManagement user={user} />
         ) : (

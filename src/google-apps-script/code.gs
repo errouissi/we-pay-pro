@@ -2,6 +2,7 @@ const USERS_SHEET_NAME = "Users";
 const CLIENTS_SHEET_NAME = "Clients";
 const AGENTS_SHEET_NAME = "Agents";
 const WAFACASH_SHEET_NAME = "Wafacash";
+const WE_PAY_PRO_SHEET_NAME = "We Pay Pro";
 
 // Google Drive folder ID
 const DRIVE_FOLDER_ID = "1g9wXnrBn63Vy0I6mjXX4Mta7KAD4iC3g";
@@ -13,6 +14,22 @@ const ALLOWED_OPERATORS = ["INWI", "ORANGE", "IAM"];
 
 // Google Drive backup folder ID for daily JSON audit logs
 const BACKUP_FOLDER_ID = "1UzVVX4cK6I49CM-WAgtbfaFOAxFCw7hR";
+
+// ============================================================================
+// IMPORTANT — REPLACE BEFORE DEPLOYING:
+// "PUT_SPREADSHEET_ID_HERE" is a placeholder. You MUST replace it with the
+// real Google Sheet ID (the long id in the sheet's URL between /d/ and /edit)
+// before copying this file into the Apps Script editor and deploying. Using
+// an explicit ID instead of SpreadsheetApp.getActiveSpreadsheet() guarantees
+// every execution writes to the same spreadsheet regardless of which
+// deployment/copy of this script project handled the request — deploying
+// with the placeholder still in place will make every request fail.
+// ============================================================================
+const SPREADSHEET_ID = "14EXZhPbeJCIb-lXhUu69hkqJ2HyUkoksDPZ5BELOABk";
+
+function getSpreadsheet() {
+  return SpreadsheetApp.openById(SPREADSHEET_ID);
+}
 
 // Backup/Audit Log Helpers
 function getBackupFolder() {
@@ -113,6 +130,12 @@ function doPost(e) {
       case "getWafacash":
         return handleGetWafacash(body);
 
+      case "createWePayPro":
+        return handleCreateWePayPro(body);
+
+      case "getWePayPro":
+        return handleGetWePayPro(body);
+
       case "createUser":
         return handleCreateUser(body);
 
@@ -206,7 +229,8 @@ function handleLogin(body) {
 
 function handleCreateClient(body) {
   var start = Date.now();
-  Logger.log("createClient start");
+  const operationId = generateOperationId("CL");
+  Logger.log("createClient start — operation_id=" + operationId);
 
   const requiredFields = [
     "userId",
@@ -228,6 +252,7 @@ function handleCreateClient(body) {
     }
   });
 
+  const userId = String(body.userId || "").trim();
   const normalizedTelephone = normalizeMoroccanPhone(body.telephone);
 
   if (!isValidMoroccanPhone(normalizedTelephone)) {
@@ -253,7 +278,8 @@ function handleCreateClient(body) {
   }
 
   const rootFolder = DriveApp.getFolderById(DRIVE_FOLDER_ID);
-  const folder = getOrCreatePersonFolder(rootFolder, body.nom, body.prenom);
+  const clientsFolder = getOrCreateChildFolder(rootFolder, "Clients");
+  const folder = getOrCreatePersonFolder(clientsFolder, body.nom, body.prenom);
 
   const clientId = generateClientId();
 
@@ -268,40 +294,76 @@ function handleCreateClient(body) {
 
   const sheet = getSheet(CLIENTS_SHEET_NAME);
 
-  sheet.appendRow([
-    new Date(),
-    clientId,
-    body.nom,
-    body.prenom,
-    body.cin,
-    body.ville,
-    "", // telephone will be written as text below to keep leading 0
-    operator,
-    latitude,
-    longitude,
-    localisationLink,
-    cinRectoLink,
-    cinVersoLink,
-    pieceJointeLink,
-    body.userId,
-    body.userName,
-  ]);
+  var lastRow;
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    ensureColumnExists(sheet, "operation_id", "created_by_name");
 
-  const lastRow = sheet.getLastRow();
-  const telephoneColumnIndex = 7; // telephone column
+    sheet.appendRow([
+      new Date(),
+      clientId,
+      body.nom,
+      body.prenom,
+      body.cin,
+      body.ville,
+      "", // telephone will be written as text below to keep leading 0
+      operator,
+      latitude,
+      longitude,
+      localisationLink,
+      cinRectoLink,
+      cinVersoLink,
+      pieceJointeLink,
+      userId,
+      body.userName,
+      operationId,
+    ]);
 
-  sheet
-    .getRange(lastRow, telephoneColumnIndex)
-    .setNumberFormat("@")
-    .setValue("'" + normalizedTelephone);
+    lastRow = sheet.getLastRow();
+    const telephoneColumnIndex = 7; // telephone column
 
-  Logger.log("after sheet append: " + (Date.now() - start));
+    sheet
+      .getRange(lastRow, telephoneColumnIndex)
+      .setNumberFormat("@")
+      .setValue("'" + normalizedTelephone);
+
+    Logger.log("after sheet append: " + (Date.now() - start));
+    logSheetWrite(operationId, sheet, lastRow, "client_id", clientId);
+  } catch (sheetError) {
+    appendJsonBackup("clients", {
+      event: "createClient_failed",
+      status: "sheet_failed",
+      created_at: formatDate(new Date()),
+      operation_id: operationId,
+      error_message: String(sheetError.message || sheetError),
+      user_id: userId,
+      username: body.userName,
+      nom: body.nom,
+      prenom: body.prenom,
+      cin: body.cin,
+      ville: body.ville,
+      telephone: normalizedTelephone,
+      operator: operator,
+      cin_recto_url: cinRectoLink,
+      cin_verso_url: cinVersoLink,
+      piece_jointe_url: pieceJointeLink,
+      latitude: latitude,
+      longitude: longitude,
+      localisation_link: localisationLink
+    });
+    throw sheetError;
+  } finally {
+    lock.releaseLock();
+  }
 
   appendJsonBackup("clients", {
     event: "createClient_success",
+    status: "sheet_saved",
     created_at: formatDate(new Date()),
     row_number: lastRow,
-    user_id: body.userId,
+    operation_id: operationId,
+    user_id: userId,
     username: body.userName,
     nom: body.nom,
     prenom: body.prenom,
@@ -324,6 +386,7 @@ function handleCreateClient(body) {
     success: true,
     message: "Client enregistré avec succès",
     client_id: clientId,
+    operation_id: operationId,
   });
 }
 
@@ -372,6 +435,7 @@ function handleGetClients(body) {
       piece_jointe_link: client.piece_jointe_link || "",
       created_by_user_id: client.created_by_user_id || "",
       created_by_name: client.created_by_name || "",
+      operation_id: client.operation_id || "",
     }));
 
   return jsonResponse({
@@ -382,7 +446,8 @@ function handleGetClients(body) {
 
 function handleCreateAgent(body) {
   var start = Date.now();
-  Logger.log("createAgent start");
+  const operationId = generateOperationId("AG");
+  Logger.log("createAgent start — operation_id=" + operationId);
 
   const requiredFields = [
     "userId",
@@ -403,6 +468,7 @@ function handleCreateAgent(body) {
     }
   });
 
+  const userId = String(body.userId || "").trim();
   const normalizedTelephone = normalizeMoroccanPhone(body.telephone);
 
   if (!isValidMoroccanPhone(normalizedTelephone)) {
@@ -433,7 +499,8 @@ function handleCreateAgent(body) {
   }
 
   const rootFolder = DriveApp.getFolderById(DRIVE_FOLDER_ID);
-  const folder = getOrCreatePersonFolder(rootFolder, body.nom, body.prenom);
+  const agentsFolder = getOrCreateChildFolder(rootFolder, "Agents");
+  const folder = getOrCreatePersonFolder(agentsFolder, body.nom, body.prenom);
   const agentId = generateAgentId();
 
   Logger.log("before upload files: " + (Date.now() - start));
@@ -449,34 +516,68 @@ function handleCreateAgent(body) {
 
   const sheet = getOrCreateAgentsSheet();
 
-  sheet.appendRow([
-    new Date(),
-    body.nom,
-    body.prenom,
-    "", // telephone written as text below to preserve leading 0 (col 4)
-    email, // col 5
-    typeAgent,
-    photoDocument.url,
-    cinRecto.url,
-    cinVerso.url,
-    photoLocal.url,
-    latitude,
-    longitude,
-    localisationLink,
-    body.userId,
-    body.userName,
-    "", // agent_pdf_url — updated below after PDF generation (col 16)
-  ]);
+  var lastRow;
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    ensureColumnExists(sheet, "operation_id", "agent_pdf_url");
 
-  const lastRow = sheet.getLastRow();
-  const telephoneColumnIndex = 4; // column D — same trick as createClient
+    sheet.appendRow([
+      new Date(),
+      body.nom,
+      body.prenom,
+      "", // telephone written as text below to preserve leading 0 (col 4)
+      email, // col 5
+      typeAgent,
+      photoDocument.url,
+      cinRecto.url,
+      cinVerso.url,
+      photoLocal.url,
+      latitude,
+      longitude,
+      localisationLink,
+      userId,
+      body.userName,
+      "", // agent_pdf_url — updated below after PDF generation (col 16)
+      operationId,
+    ]);
 
-  sheet
-    .getRange(lastRow, telephoneColumnIndex)
-    .setNumberFormat("@")
-    .setValue("'" + normalizedTelephone);
+    lastRow = sheet.getLastRow();
+    const telephoneColumnIndex = 4; // column D — same trick as createClient
 
-  Logger.log("after sheet append: " + (Date.now() - start));
+    sheet
+      .getRange(lastRow, telephoneColumnIndex)
+      .setNumberFormat("@")
+      .setValue("'" + normalizedTelephone);
+
+    Logger.log("after sheet append: " + (Date.now() - start));
+    logSheetWrite(operationId, sheet, lastRow, "agent_id", agentId);
+  } catch (sheetError) {
+    appendJsonBackup("agents", {
+      event: "createAgent_failed",
+      status: "sheet_failed",
+      created_at: formatDate(new Date()),
+      operation_id: operationId,
+      error_message: String(sheetError.message || sheetError),
+      user_id: userId,
+      username: body.userName,
+      nom: body.nom,
+      prenom: body.prenom,
+      telephone: normalizedTelephone,
+      email: email,
+      type_agent: typeAgent,
+      document_photo_url: photoDocument.url,
+      cin_recto_url: cinRecto.url,
+      cin_verso_url: cinVerso.url,
+      local_photo_url: photoLocal.url,
+      latitude: latitude,
+      longitude: longitude,
+      localisation_link: localisationLink
+    });
+    throw sheetError;
+  } finally {
+    lock.releaseLock();
+  }
 
   // Generate PDF after the row is saved — failure here does not lose the agent
   var agentPdfUrl = "";
@@ -509,9 +610,11 @@ function handleCreateAgent(body) {
 
   appendJsonBackup("agents", {
     event: "createAgent_success",
+    status: "sheet_saved",
     created_at: formatDate(new Date()),
     row_number: lastRow,
-    user_id: body.userId,
+    operation_id: operationId,
+    user_id: userId,
     username: body.userName,
     nom: body.nom,
     prenom: body.prenom,
@@ -536,6 +639,7 @@ function handleCreateAgent(body) {
     success: true,
     message: "Agent enregistré avec succès",
     pdf_debug: agentPdfError || null,
+    operation_id: operationId,
   });
 }
 
@@ -546,7 +650,7 @@ function handleGetAgents(body) {
     throw new Error("userId is required");
   }
 
-  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  const spreadsheet = getSpreadsheet();
   const sheet = spreadsheet.getSheetByName(AGENTS_SHEET_NAME);
 
   if (!sheet) {
@@ -587,6 +691,7 @@ function handleGetAgents(body) {
       longitude: agent.longitude || "",
       localisation_link: agent.localisation_link || "",
       agent_pdf_url: agent.agent_pdf_url || "",
+      operation_id: agent.operation_id || "",
     }));
 
   return jsonResponse({ success: true, agents });
@@ -594,7 +699,8 @@ function handleGetAgents(body) {
 
 function handleCreateWafacash(body) {
   var start = Date.now();
-  Logger.log("createWafacash start");
+  const operationId = generateOperationId("WF");
+  Logger.log("createWafacash start — operation_id=" + operationId);
 
   const requiredFields = [
     "userId",
@@ -611,6 +717,7 @@ function handleCreateWafacash(body) {
     }
   });
 
+  const userId = String(body.userId || "").trim();
   const normalizedTelephone = normalizeMoroccanPhone(body.telephone);
 
   if (!isValidMoroccanPhone(normalizedTelephone)) {
@@ -633,7 +740,8 @@ function handleCreateWafacash(body) {
   }
 
   const rootFolder = DriveApp.getFolderById(DRIVE_FOLDER_ID);
-  const folder = getOrCreatePersonFolder(rootFolder, body.nom, body.prenom);
+  const wafacashFolder = getOrCreateChildFolder(rootFolder, "Wafacash");
+  const folder = getOrCreatePersonFolder(wafacashFolder, body.nom, body.prenom);
 
   const wafacashId = generateWafacashId();
 
@@ -647,40 +755,74 @@ function handleCreateWafacash(body) {
   Logger.log("after photoLocal upload: " + (Date.now() - start));
 
   const sheet = getOrCreateWafacashSheet();
-  const telephoneColumnIndex = ensureWafacashTelephoneColumn(sheet);
-  ensureWafacashPhotoLocalColumn(sheet);
 
-  sheet.appendRow([
-    new Date(),
-    wafacashId,
-    body.nom,
-    body.prenom,
-    "", // telephone written as text below to preserve leading 0 (same trick as createClient/createAgent)
-    body.adresse,
-    latitude,
-    longitude,
-    localisationLink,
-    cinRecto.url,
-    cinVerso.url,
-    photoLocal.url,
-    body.userId,
-    body.userName,
-  ]);
+  var lastRow;
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const telephoneColumnIndex = ensureWafacashTelephoneColumn(sheet);
+    ensureWafacashPhotoLocalColumn(sheet);
+    ensureColumnExists(sheet, "operation_id", "created_by_username");
 
-  const lastRow = sheet.getLastRow();
+    sheet.appendRow([
+      new Date(),
+      wafacashId,
+      body.nom,
+      body.prenom,
+      "", // telephone written as text below to preserve leading 0 (same trick as createClient/createAgent)
+      body.adresse,
+      latitude,
+      longitude,
+      localisationLink,
+      cinRecto.url,
+      cinVerso.url,
+      photoLocal.url,
+      userId,
+      body.userName,
+      operationId,
+    ]);
 
-  sheet
-    .getRange(lastRow, telephoneColumnIndex)
-    .setNumberFormat("@")
-    .setValue("'" + normalizedTelephone);
+    lastRow = sheet.getLastRow();
 
-  Logger.log("after sheet append: " + (Date.now() - start));
+    sheet
+      .getRange(lastRow, telephoneColumnIndex)
+      .setNumberFormat("@")
+      .setValue("'" + normalizedTelephone);
+
+    Logger.log("after sheet append: " + (Date.now() - start));
+    logSheetWrite(operationId, sheet, lastRow, "wafacash_id", wafacashId);
+  } catch (sheetError) {
+    appendJsonBackup("wafacash", {
+      event: "createWafacash_failed",
+      status: "sheet_failed",
+      created_at: formatDate(new Date()),
+      operation_id: operationId,
+      error_message: String(sheetError.message || sheetError),
+      user_id: userId,
+      username: body.userName,
+      nom: body.nom,
+      prenom: body.prenom,
+      telephone: normalizedTelephone,
+      adresse: body.adresse,
+      cin_recto_url: cinRecto.url,
+      cin_verso_url: cinVerso.url,
+      photo_local_url: photoLocal.url,
+      latitude: latitude,
+      longitude: longitude,
+      localisation_link: localisationLink
+    });
+    throw sheetError;
+  } finally {
+    lock.releaseLock();
+  }
 
   appendJsonBackup("wafacash", {
     event: "createWafacash_success",
+    status: "sheet_saved",
     created_at: formatDate(new Date()),
     row_number: lastRow,
-    user_id: body.userId,
+    operation_id: operationId,
+    user_id: userId,
     username: body.userName,
     nom: body.nom,
     prenom: body.prenom,
@@ -701,6 +843,7 @@ function handleCreateWafacash(body) {
     success: true,
     message: "Le formulaire Wafacash a été enregistré avec succès",
     wafacash_id: wafacashId,
+    operation_id: operationId,
   });
 }
 
@@ -711,7 +854,7 @@ function handleGetWafacash(body) {
     throw new Error("userId is required");
   }
 
-  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  const spreadsheet = getSpreadsheet();
   const sheet = spreadsheet.getSheetByName(WAFACASH_SHEET_NAME);
 
   if (!sheet) {
@@ -753,9 +896,232 @@ function handleGetWafacash(body) {
       photo_local_url: w.photo_local_url || "",
       created_by_user_id: w.created_by_user_id || "",
       created_by_username: w.created_by_username || "",
+      operation_id: w.operation_id || "",
     }));
 
   return jsonResponse({ success: true, wafacash });
+}
+
+function handleCreateWePayPro(body) {
+  var start = Date.now();
+  const operationId = generateOperationId("WPP");
+  Logger.log("createWePayPro start — operation_id=" + operationId);
+
+  const requiredFields = [
+    "userId",
+    "userName",
+    "numeroDossier",
+    "nom",
+    "prenom",
+    "cin",
+    "ville",
+    "telephone",
+    "operator",
+    "latitude",
+    "longitude",
+    "localisationLink",
+  ];
+
+  requiredFields.forEach((field) => {
+    if (!body[field]) {
+      throw new Error(`${field} is required`);
+    }
+  });
+
+  const userId = String(body.userId || "").trim();
+  const dossierNumber = normalizeDossierNumber(body.numeroDossier);
+
+  const normalizedTelephone = normalizeMoroccanPhone(body.telephone);
+
+  if (!isValidMoroccanPhone(normalizedTelephone)) {
+    throw new Error("Invalid Moroccan phone number");
+  }
+
+  const operator = String(body.operator || "").trim().toUpperCase();
+
+  if (!ALLOWED_OPERATORS.includes(operator)) {
+    throw new Error("Invalid operator");
+  }
+
+  const latitude = String(body.latitude || "").trim();
+  const longitude = String(body.longitude || "").trim();
+  const localisationLink = String(body.localisationLink || "").trim();
+
+  if (!latitude || !longitude || !localisationLink) {
+    throw new Error("Location is required");
+  }
+
+  if (!body.cinRecto || !body.cinVerso || !body.pieceJointe) {
+    throw new Error("All files are required");
+  }
+
+  const rootFolder = DriveApp.getFolderById(DRIVE_FOLDER_ID);
+  const wePayProFolder = getOrCreateChildFolder(rootFolder, "We pay pro Form");
+  const folder = getOrCreatePersonFolder(wePayProFolder, body.nom, body.prenom);
+
+  const wePayProId = generateWePayProId();
+
+  Logger.log("before upload files: " + (Date.now() - start));
+
+  const cinRecto = uploadBase64File(folder, body.cinRecto, wePayProId, buildFileLabel("cin_recto", body.nom, body.prenom));
+  Logger.log("after cinRecto upload: " + (Date.now() - start));
+  const cinVerso = uploadBase64File(folder, body.cinVerso, wePayProId, buildFileLabel("cin_verso", body.nom, body.prenom));
+  Logger.log("after cinVerso upload: " + (Date.now() - start));
+  const pieceJointe = uploadBase64File(folder, body.pieceJointe, wePayProId, buildFileLabel("piece_jointe", body.nom, body.prenom));
+  Logger.log("after pieceJointe upload: " + (Date.now() - start));
+
+  const sheet = getOrCreateWePayProSheet();
+
+  var lastRow;
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    ensureColumnExists(sheet, "operation_id", "created_by_username");
+
+    sheet.appendRow([
+      new Date(),
+      dossierNumber,
+      body.nom,
+      body.prenom,
+      body.cin,
+      body.ville,
+      "", // telephone written as text below to preserve leading 0 (same trick as createClient/createAgent)
+      operator,
+      cinRecto.url,
+      cinVerso.url,
+      pieceJointe.url,
+      latitude,
+      longitude,
+      localisationLink,
+      userId,
+      body.userName,
+      operationId,
+    ]);
+
+    lastRow = sheet.getLastRow();
+    const telephoneColumnIndex = 7; // created_at, dossier_number, nom, prenom, cin, ville, telephone
+
+    sheet
+      .getRange(lastRow, telephoneColumnIndex)
+      .setNumberFormat("@")
+      .setValue("'" + normalizedTelephone);
+
+    Logger.log("after sheet append: " + (Date.now() - start));
+    logSheetWrite(operationId, sheet, lastRow, "dossier_number", dossierNumber);
+  } catch (sheetError) {
+    appendJsonBackup("wepaypro", {
+      event: "createWePayPro_failed",
+      status: "sheet_failed",
+      created_at: formatDate(new Date()),
+      operation_id: operationId,
+      error_message: String(sheetError.message || sheetError),
+      user_id: userId,
+      username: body.userName,
+      dossier_number: dossierNumber,
+      nom: body.nom,
+      prenom: body.prenom,
+      cin: body.cin,
+      ville: body.ville,
+      telephone: normalizedTelephone,
+      operator: operator,
+      cin_recto_url: cinRecto.url,
+      cin_verso_url: cinVerso.url,
+      piece_jointe_url: pieceJointe.url,
+      latitude: latitude,
+      longitude: longitude,
+      localisation_link: localisationLink
+    });
+    throw sheetError;
+  } finally {
+    lock.releaseLock();
+  }
+
+  appendJsonBackup("wepaypro", {
+    event: "createWePayPro_success",
+    status: "sheet_saved",
+    created_at: formatDate(new Date()),
+    row_number: lastRow,
+    operation_id: operationId,
+    user_id: userId,
+    username: body.userName,
+    dossier_number: dossierNumber,
+    nom: body.nom,
+    prenom: body.prenom,
+    cin: body.cin,
+    ville: body.ville,
+    telephone: normalizedTelephone,
+    operator: operator,
+    cin_recto_url: cinRecto.url,
+    cin_verso_url: cinVerso.url,
+    piece_jointe_url: pieceJointe.url,
+    latitude: latitude,
+    longitude: longitude,
+    localisation_link: localisationLink
+  });
+
+  Logger.log("after backup: " + (Date.now() - start));
+  Logger.log("createWePayPro done: " + (Date.now() - start));
+
+  return jsonResponse({
+    success: true,
+    message: "We Pay Pro enregistré avec succès",
+    dossier_number: dossierNumber,
+    operation_id: operationId,
+  });
+}
+
+function handleGetWePayPro(body) {
+  const userId = String(body.userId || "").trim();
+
+  if (!userId) {
+    throw new Error("userId is required");
+  }
+
+  const spreadsheet = getSpreadsheet();
+  const sheet = spreadsheet.getSheetByName(WE_PAY_PRO_SHEET_NAME);
+
+  if (!sheet) {
+    return jsonResponse({ success: true, wepaypro: [] });
+  }
+
+  const values = sheet.getDataRange().getValues();
+
+  if (values.length < 2) {
+    return jsonResponse({ success: true, wepaypro: [] });
+  }
+
+  const headers = values[0];
+  const rows = values.slice(1);
+
+  const isAdmin = getUserRole(userId) === "admin";
+
+  const wepaypro = rows
+    .map((row) => rowToObject(headers, row))
+    .filter((w) => {
+      if (isAdmin) return true;
+      return String(w.created_by_user_id || "").trim() === userId;
+    })
+    .map((w) => ({
+      created_at: formatDate(w.created_at),
+      dossier_number: w.dossier_number || "",
+      nom: w.nom || "",
+      prenom: w.prenom || "",
+      cin: w.cin || "",
+      ville: w.ville || "",
+      telephone: w.telephone || "",
+      operator: w.operator || "",
+      cin_recto_url: w.cin_recto_url || "",
+      cin_verso_url: w.cin_verso_url || "",
+      piece_jointe_url: w.piece_jointe_url || "",
+      latitude: w.latitude || "",
+      longitude: w.longitude || "",
+      localisation_link: w.localisation_link || "",
+      created_by_user_id: w.created_by_user_id || "",
+      created_by_username: w.created_by_username || "",
+      operation_id: w.operation_id || "",
+    }));
+
+  return jsonResponse({ success: true, wepaypro });
 }
 
 function handleCreateUser(body) {
@@ -1087,7 +1453,7 @@ function isValidEmail(email) {
 }
 
 function getUserRole(userId) {
-  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  var spreadsheet = getSpreadsheet();
   var sheet = spreadsheet.getSheetByName(USERS_SHEET_NAME);
   if (!sheet) return "commercial";
 
@@ -1155,8 +1521,67 @@ function generateWafacashId() {
   return `WF${timestamp}${random}`;
 }
 
+function generateWePayProId() {
+  const now = new Date();
+  const timestamp = Utilities.formatDate(now, Session.getScriptTimeZone(), "yyyyMMddHHmmss");
+  const random = Math.floor(Math.random() * 9000) + 1000;
+  return `WPP${timestamp}${random}`;
+}
+
+// operation_id ties together the Sheet row, the backup JSON record (success
+// or failed), and the Logger.log trail for a single create submission — so a
+// specific reported-missing case can be traced end to end. Prefixes: CL
+// (client), AG (agent), WF (wafacash), WPP (wepaypro).
+function generateOperationId(prefix) {
+  const now = new Date();
+  const timestamp = Utilities.formatDate(now, Session.getScriptTimeZone(), "yyyyMMddHHmmss");
+  const random = Math.floor(Math.random() * 900000) + 100000;
+  return prefix + "-" + timestamp + "-" + random;
+}
+
+// Generic column-migration helper: no-op if headerName already exists,
+// otherwise inserts it right after insertAfterHeaderName (or at the end if
+// that header isn't found). Existing rows get a blank value in the new cell.
+function ensureColumnExists(sheet, headerName, insertAfterHeaderName) {
+  const colMap = getSheetColumnMap(sheet);
+  if (colMap[headerName]) return colMap[headerName];
+
+  const insertAt = insertAfterHeaderName && colMap[insertAfterHeaderName]
+    ? colMap[insertAfterHeaderName] + 1
+    : sheet.getLastColumn() + 1;
+
+  sheet.insertColumnBefore(insertAt);
+  sheet.getRange(1, insertAt).setValue(headerName);
+  return insertAt;
+}
+
+// Logged after every successful sheet write so a reported-missing operation_id
+// can be cross-referenced against exactly which spreadsheet/sheet/row it went
+// to — this is what makes a future "wrong spreadsheet" incident diagnosable.
+function logSheetWrite(operationId, sheet, lastRow, keyLabel, keyValue) {
+  Logger.log(
+    "operation_id=" + operationId +
+    " spreadsheet=" + sheet.getParent().getUrl() +
+    " sheet=" + sheet.getName() +
+    " lastRow=" + lastRow +
+    " " + keyLabel + "=" + keyValue
+  );
+}
+
+// Commercial enters only the raw value (e.g. "12345"); backend always owns
+// the "DOS-" prefix so it can't be spoofed or duplicated by frontend input
+// (e.g. a user typing "DOS-12345" still normalizes to a single prefix).
+function normalizeDossierNumber(value) {
+  var raw = String(value || "").trim();
+  raw = raw.replace(/^DOS-?/i, "").trim();
+  if (!raw) {
+    throw new Error("numero_dossier is required");
+  }
+  return "DOS-" + raw;
+}
+
 function getSheet(sheetName) {
-  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  const spreadsheet = getSpreadsheet();
   const sheet = spreadsheet.getSheetByName(sheetName);
 
   if (!sheet) {
@@ -1167,7 +1592,7 @@ function getSheet(sheetName) {
 }
 
 function getOrCreateAgentsSheet() {
-  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  const spreadsheet = getSpreadsheet();
   let sheet = spreadsheet.getSheetByName(AGENTS_SHEET_NAME);
 
   if (!sheet) {
@@ -1189,6 +1614,7 @@ function getOrCreateAgentsSheet() {
       "created_by_user_id",
       "created_by_username",
       "agent_pdf_url",
+      "operation_id",
     ]);
   }
 
@@ -1196,7 +1622,7 @@ function getOrCreateAgentsSheet() {
 }
 
 function getOrCreateWafacashSheet() {
-  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  const spreadsheet = getSpreadsheet();
   let sheet = spreadsheet.getSheetByName(WAFACASH_SHEET_NAME);
 
   if (!sheet) {
@@ -1216,6 +1642,37 @@ function getOrCreateWafacashSheet() {
       "photo_local_url",
       "created_by_user_id",
       "created_by_username",
+      "operation_id",
+    ]);
+  }
+
+  return sheet;
+}
+
+function getOrCreateWePayProSheet() {
+  const spreadsheet = getSpreadsheet();
+  let sheet = spreadsheet.getSheetByName(WE_PAY_PRO_SHEET_NAME);
+
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(WE_PAY_PRO_SHEET_NAME);
+    sheet.appendRow([
+      "created_at",
+      "dossier_number",
+      "nom",
+      "prenom",
+      "cin",
+      "ville",
+      "telephone",
+      "operator",
+      "cin_recto_url",
+      "cin_verso_url",
+      "piece_jointe_url",
+      "latitude",
+      "longitude",
+      "localisation_link",
+      "created_by_user_id",
+      "created_by_username",
+      "operation_id",
     ]);
   }
 
