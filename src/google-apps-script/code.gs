@@ -130,6 +130,9 @@ function doPost(e) {
       case "getWafacash":
         return handleGetWafacash(body);
 
+      case "updateWafacash":
+        return handleUpdateWafacash(body);
+
       case "createWePayPro":
         return handleCreateWePayPro(body);
 
@@ -763,6 +766,8 @@ function handleCreateWafacash(body) {
     const telephoneColumnIndex = ensureWafacashTelephoneColumn(sheet);
     ensureWafacashPhotoLocalColumn(sheet);
     ensureColumnExists(sheet, "operation_id", "created_by_username");
+    ensureColumnExists(sheet, "status", "photo_local_url");
+    ensureColumnExists(sheet, "first_recharge", "status");
 
     sheet.appendRow([
       new Date(),
@@ -777,6 +782,8 @@ function handleCreateWafacash(body) {
       cinRecto.url,
       cinVerso.url,
       photoLocal.url,
+      "inactive", // status — new Wafacash submissions always start inactive
+      "", // first_recharge — not collected on create
       userId,
       body.userName,
       operationId,
@@ -833,7 +840,9 @@ function handleCreateWafacash(body) {
     photo_local_url: photoLocal.url,
     latitude: latitude,
     longitude: longitude,
-    localisation_link: localisationLink
+    localisation_link: localisationLink,
+    wafacash_status: "inactive",
+    first_recharge: ""
   });
 
   Logger.log("after backup: " + (Date.now() - start));
@@ -863,6 +872,8 @@ function handleGetWafacash(body) {
 
   ensureWafacashTelephoneColumn(sheet);
   ensureWafacashPhotoLocalColumn(sheet);
+  ensureColumnExists(sheet, "status", "photo_local_url");
+  ensureColumnExists(sheet, "first_recharge", "status");
 
   const values = sheet.getDataRange().getValues();
 
@@ -894,12 +905,83 @@ function handleGetWafacash(body) {
       cin_recto_url: w.cin_recto_url || "",
       cin_verso_url: w.cin_verso_url || "",
       photo_local_url: w.photo_local_url || "",
+      status: normalizeWafacashStatusForDisplay(w.status),
+      first_recharge: w.first_recharge || "",
       created_by_user_id: w.created_by_user_id || "",
       created_by_username: w.created_by_username || "",
       operation_id: w.operation_id || "",
     }));
 
   return jsonResponse({ success: true, wafacash });
+}
+
+function handleUpdateWafacash(body) {
+  var userId = String(body.userId || "").trim();
+  if (!userId) {
+    return jsonResponse({ success: false, message: "userId is required" });
+  }
+
+  var wafacashId = String(body.wafacash_id || "").trim();
+  if (!wafacashId) {
+    return jsonResponse({ success: false, message: "wafacash_id is required" });
+  }
+
+  var status;
+  try {
+    status = normalizeWafacashStatus(body.status);
+  } catch (err) {
+    return jsonResponse({ success: false, message: String(err.message || err) });
+  }
+
+  var firstRecharge = String(body.first_recharge || "").trim();
+
+  var sheet = getOrCreateWafacashSheet();
+  ensureWafacashTelephoneColumn(sheet);
+  ensureWafacashPhotoLocalColumn(sheet);
+  var statusColumnIndex = ensureColumnExists(sheet, "status", "photo_local_url");
+  var firstRechargeColumnIndex = ensureColumnExists(sheet, "first_recharge", "status");
+
+  var values = sheet.getDataRange().getValues();
+  var headers = values[0];
+  var rows = values.slice(1);
+  var isAdmin = getUserRole(userId) === "admin";
+
+  var targetRowIndex = -1;
+  for (var i = 0; i < rows.length; i++) {
+    var w = rowToObject(headers, rows[i]);
+    if (String(w.wafacash_id || "").trim() === wafacashId) {
+      if (!isAdmin && String(w.created_by_user_id || "").trim() !== userId) {
+        return jsonResponse({ success: false, message: "Accès refusé" });
+      }
+      targetRowIndex = i + 2; // +1 for header row, +1 for 1-based index
+      break;
+    }
+  }
+
+  if (targetRowIndex === -1) {
+    return jsonResponse({ success: false, message: "Wafacash non trouvé" });
+  }
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    sheet.getRange(targetRowIndex, statusColumnIndex).setValue(status);
+    sheet.getRange(targetRowIndex, firstRechargeColumnIndex).setValue(firstRecharge);
+  } finally {
+    lock.releaseLock();
+  }
+
+  appendJsonBackup("wafacash", {
+    event: "updateWafacash_success",
+    status: "updated",
+    created_at: formatDate(new Date()),
+    requester_id: userId,
+    wafacash_id: wafacashId,
+    new_status: status,
+    first_recharge: firstRecharge
+  });
+
+  return jsonResponse({ success: true, message: "Wafacash mis à jour avec succès" });
 }
 
 function handleCreateWePayPro(body) {
@@ -1448,6 +1530,26 @@ function isValidMoroccanPhone(value) {
   return /^(05|06|07)\d{8}$/.test(value);
 }
 
+const WAFACASH_ALLOWED_STATUSES = ["inactive", "active"];
+
+// Throws on an explicitly-invalid status; used by handleUpdateWafacash to
+// validate caller input. Empty/missing defaults to "inactive".
+function normalizeWafacashStatus(value) {
+  var status = String(value || "").trim().toLowerCase();
+  if (!status) return "inactive";
+  if (WAFACASH_ALLOWED_STATUSES.indexOf(status) === -1) {
+    throw new Error("Invalid Wafacash status");
+  }
+  return status;
+}
+
+// Never throws — used when reading existing sheet rows so old/blank/garbage
+// status values can't crash handleGetWafacash.
+function normalizeWafacashStatusForDisplay(value) {
+  var status = String(value || "").trim().toLowerCase();
+  return WAFACASH_ALLOWED_STATUSES.indexOf(status) !== -1 ? status : "inactive";
+}
+
 function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || "").trim());
 }
@@ -1640,6 +1742,8 @@ function getOrCreateWafacashSheet() {
       "cin_recto_url",
       "cin_verso_url",
       "photo_local_url",
+      "status",
+      "first_recharge",
       "created_by_user_id",
       "created_by_username",
       "operation_id",

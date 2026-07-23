@@ -42,7 +42,7 @@ type Props = {
 
 export function DashboardLayout({ user, onLogout }: Props) {
   const [view, setView] = useState<View>(() => hashToView(window.location.hash));
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
 
   useEffect(() => {
     const onHashChange = () => setView(hashToView(window.location.hash));
@@ -69,38 +69,6 @@ export function DashboardLayout({ user, onLogout }: Props) {
             </div>
           </div>
 
-          <nav className="hidden items-center gap-2 md:flex">
-            <button onClick={() => { window.location.hash = "#new"; }} className={navBtn(view === "new")}>
-              Nouveau client
-            </button>
-            <button onClick={() => { window.location.hash = "#clients"; }} className={navBtn(view === "list")}>
-              {user.role === "admin" ? "Tous les clients" : "Mes clients"}
-            </button>
-            <button onClick={() => { window.location.hash = "#agent"; }} className={navBtn(view === "agent")}>
-              Nouvel agent
-            </button>
-            <button onClick={() => { window.location.hash = "#wafacash"; }} className={navBtn(view === "wafacash")}>
-              Wafacash
-            </button>
-            <button onClick={() => { window.location.hash = "#wafacash-list"; }} className={navBtn(view === "wafacash-list")}>
-              {user.role === "admin" ? "Tous les Wafacash" : "Mes Wafacash"}
-            </button>
-            <button onClick={() => { window.location.hash = "#wepaypro"; }} className={navBtn(view === "wepaypro")}>
-              We Pay Pro Form
-            </button>
-            <button onClick={() => { window.location.hash = "#wepaypro-list"; }} className={navBtn(view === "wepaypro-list")}>
-              {user.role === "admin" ? "Tous les We Pay Pro" : "Mes We Pay Pro"}
-            </button>
-            <button onClick={() => { window.location.hash = "#agents"; }} className={navBtn(view === "agents")}>
-              {user.role === "admin" ? "Tous les agents" : "Mes agents"}
-            </button>
-            {user.role === "admin" && (
-              <button onClick={() => { window.location.hash = "#users"; }} className={navBtn(view === "users")}>
-                Gestion utilisateurs
-              </button>
-            )}
-          </nav>
-
           <div className="flex items-center gap-3">
             <div className="hidden text-right sm:block">
               <p className="text-xs text-[#00562B]/70">Connecté</p>
@@ -120,9 +88,10 @@ export function DashboardLayout({ user, onLogout }: Props) {
               Déconnexion
             </button>
             <button
-              onClick={() => setMobileNavOpen((v) => !v)}
-              className="rounded-lg border border-[#C8D0C4] p-2 text-[#003C18] md:hidden"
+              onClick={() => setNavOpen((v) => !v)}
+              className="rounded-lg border border-[#C8D0C4] p-2 text-[#003C18]"
               aria-label="Menu"
+              aria-expanded={navOpen}
             >
               <svg
                 width="18"
@@ -137,13 +106,13 @@ export function DashboardLayout({ user, onLogout }: Props) {
             </button>
           </div>
         </div>
-        {mobileNavOpen && (
-          <div className="border-t border-[#C8D0C4] bg-white px-4 py-3 md:hidden">
-            <div className="flex flex-col gap-2">
+        {navOpen && (
+          <div className="border-t border-[#C8D0C4] bg-white px-4 py-3">
+            <div className="flex flex-col flex-wrap gap-2 sm:flex-row">
               <button
                 onClick={() => {
                   window.location.hash = "#new";
-                  setMobileNavOpen(false);
+                  setNavOpen(false);
                 }}
                 className={navBtn(view === "new")}
               >
@@ -152,7 +121,7 @@ export function DashboardLayout({ user, onLogout }: Props) {
               <button
                 onClick={() => {
                   window.location.hash = "#clients";
-                  setMobileNavOpen(false);
+                  setNavOpen(false);
                 }}
                 className={navBtn(view === "list")}
               >
@@ -161,7 +130,7 @@ export function DashboardLayout({ user, onLogout }: Props) {
               <button
                 onClick={() => {
                   window.location.hash = "#agent";
-                  setMobileNavOpen(false);
+                  setNavOpen(false);
                 }}
                 className={navBtn(view === "agent")}
               >
@@ -170,7 +139,7 @@ export function DashboardLayout({ user, onLogout }: Props) {
               <button
                 onClick={() => {
                   window.location.hash = "#wafacash";
-                  setMobileNavOpen(false);
+                  setNavOpen(false);
                 }}
                 className={navBtn(view === "wafacash")}
               >
@@ -179,7 +148,7 @@ export function DashboardLayout({ user, onLogout }: Props) {
               <button
                 onClick={() => {
                   window.location.hash = "#wafacash-list";
-                  setMobileNavOpen(false);
+                  setNavOpen(false);
                 }}
                 className={navBtn(view === "wafacash-list")}
               >
@@ -188,7 +157,7 @@ export function DashboardLayout({ user, onLogout }: Props) {
               <button
                 onClick={() => {
                   window.location.hash = "#wepaypro";
-                  setMobileNavOpen(false);
+                  setNavOpen(false);
                 }}
                 className={navBtn(view === "wepaypro")}
               >
@@ -197,7 +166,7 @@ export function DashboardLayout({ user, onLogout }: Props) {
               <button
                 onClick={() => {
                   window.location.hash = "#wepaypro-list";
-                  setMobileNavOpen(false);
+                  setNavOpen(false);
                 }}
                 className={navBtn(view === "wepaypro-list")}
               >
@@ -206,7 +175,7 @@ export function DashboardLayout({ user, onLogout }: Props) {
               <button
                 onClick={() => {
                   window.location.hash = "#agents";
-                  setMobileNavOpen(false);
+                  setNavOpen(false);
                 }}
                 className={navBtn(view === "agents")}
               >
@@ -216,7 +185,7 @@ export function DashboardLayout({ user, onLogout }: Props) {
                 <button
                   onClick={() => {
                     window.location.hash = "#users";
-                    setMobileNavOpen(false);
+                    setNavOpen(false);
                   }}
                   className={navBtn(view === "users")}
                 >

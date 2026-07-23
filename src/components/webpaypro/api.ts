@@ -1,5 +1,5 @@
 // Replace this with your deployed Google Apps Script Web App URL.
-export const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz6IIzwiO81TELZY41GsR0luTK7b89becfNaNJuTB_g5fC_E1L543B3drmJ22Fr8mE/exec";
+export const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycby4m3h7KesJJFM1DW6iNIg3U4OSBvf2jnGuJOo_d5k-Gisb6H-rcthmkDOFaXCux6OscA/exec";
 
 export type LoggedUser = {
   user_id: string;
@@ -56,6 +56,8 @@ export type WafacashRow = {
   cin_recto_url: string;
   cin_verso_url: string;
   photo_local_url: string;
+  status: "inactive" | "active" | string;
+  first_recharge: string;
   created_by_user_id: string;
   created_by_username: string;
 };
@@ -207,6 +209,21 @@ export async function getWafacash(
   return callScript({
     action: "getWafacash",
     userId: user.user_id,
+  });
+}
+
+export async function updateWafacash(
+  user: LoggedUser,
+  data: {
+    wafacash_id: string;
+    status: "inactive" | "active";
+    first_recharge: string;
+  },
+): Promise<{ success: boolean; message?: string }> {
+  return callScript({
+    action: "updateWafacash",
+    userId: user.user_id,
+    ...data,
   });
 }
 
